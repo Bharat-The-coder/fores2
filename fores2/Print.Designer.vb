@@ -1,5 +1,5 @@
 ﻿<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()>
-Partial Class Form1
+Partial Class Print
     Inherits System.Windows.Forms.Form
 
     'Form overrides dispose to clean up the component list.
@@ -23,7 +23,7 @@ Partial Class Form1
     <System.Diagnostics.DebuggerStepThrough()>
     Private Sub InitializeComponent()
         components = New ComponentModel.Container()
-        Dim resources As ComponentModel.ComponentResourceManager = New ComponentModel.ComponentResourceManager(GetType(Form1))
+        Dim resources As ComponentModel.ComponentResourceManager = New ComponentModel.ComponentResourceManager(GetType(Print))
         Label1 = New Label()
         SelectProduct = New ComboBox()
         SelectDesc = New ComboBox()
@@ -211,11 +211,11 @@ Partial Class Form1
         ' 
         ' btn_save
         ' 
-        btn_save.BackColor = Color.Crimson
+        btn_save.BackColor = Color.Green
         btn_save.Cursor = Cursors.Hand
         btn_save.Dock = DockStyle.Bottom
         btn_save.Font = New Font("Comic Sans MS", 12F, FontStyle.Regular, GraphicsUnit.Point)
-        btn_save.ForeColor = SystemColors.ActiveCaptionText
+        btn_save.ForeColor = SystemColors.ButtonHighlight
         btn_save.Location = New Point(0, 285)
         btn_save.Name = "btn_save"
         btn_save.Size = New Size(649, 36)
@@ -465,7 +465,7 @@ Partial Class Form1
         ' 
         ToolTip1.Tag = "xcxzzzczxc"
         ' 
-        ' Form1
+        ' Print
         ' 
         AccessibleRole = AccessibleRole.Cursor
         AutoScaleDimensions = New SizeF(6F, 13F)
@@ -481,7 +481,7 @@ Partial Class Form1
         Font = New Font("Microsoft Sans Serif", 8.25F, FontStyle.Regular, GraphicsUnit.Point)
         ForeColor = SystemColors.ButtonHighlight
         Icon = CType(resources.GetObject("$this.Icon"), Icon)
-        Name = "Form1"
+        Name = "Print"
         Text = "Print Stickers"
         ToolTip1.SetToolTip(Me, "this is form1" & vbCrLf)
         WindowState = FormWindowState.Maximized

@@ -1,0 +1,681 @@
+Imports System.Windows.Forms.VisualStyles.VisualStyleElement
+Imports MySql.Data.MySqlClient
+Imports Mysqlx
+Imports System.IO
+Imports QRCoder
+Imports System.Timers
+Imports iTextSharp.text.pdf
+Imports iTextSharp.text
+
+Public Class machineup
+
+    Dim conn As New MySqlConnection("datasource=localhost;port=3306;Database=fores;username=root;password='Root@123'")
+    Private connectionString As String = "datasource=localhost;port=3306;Database=fores;username=root;password='Root@123'"
+    Dim READER As MySqlDataReader
+    Dim COMMAND As MySqlCommand
+    Dim cmd As MySqlCommand
+    Dim printed As Integer = 0
+    Dim shift = ""
+    Dim batch_no = ""
+    Dim batch_desc = ""
+    Private buttonClicked As Boolean = True
+    Dim Exit_loop As Boolean
+    Dim printDialog As New PrintDialog()
+    Dim savepath As String
+    Private Sub machineup_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+
+        Try
+
+            'Load_sap_code()
+            conn.Open()
+            Panel4.Visible = False
+            Dim query As String = "SELECT material_sap_code FROM fores.bom_material_master"
+            Dim command As New MySqlCommand(query, conn)
+            Dim reader As MySqlDataReader = command.ExecuteReader()
+
+            While reader.Read()
+                Dim material_sap_code As String = reader.GetString("material_sap_code")
+                cmbProducts.Items.Add(material_sap_code)
+            End While
+
+            reader.Close()
+
+            query = "SELECT machine_name FROM fores.machine_master"
+            command.CommandText = query
+            reader = command.ExecuteReader()
+
+            While reader.Read()
+                Dim machine_name As String = reader.GetString("machine_name")
+                ComboBox3.Items.Add(machine_name)
+
+            End While
+
+            conn.Close()
+
+            ' Set ComboBox3 as a searchable ComboBox
+            ComboBox3.AutoCompleteMode = AutoCompleteMode.Suggest
+            ComboBox3.AutoCompleteSource = AutoCompleteSource.ListItems
+
+        Catch ex As Exception
+            ' Handle the exception or display an error message
+            MessageBox.Show(ex.Message)
+
+        Finally
+            conn.Dispose()
+        End Try
+
+
+
+
+        ' Set cmbProducts as a searchable ComboBox
+        cmbProducts.AutoCompleteMode = AutoCompleteMode.Suggest
+        cmbProducts.AutoCompleteSource = AutoCompleteSource.ListItems
+
+
+
+
+
+    End Sub
+
+
+    Private Sub ComboBox1_SelectedIndexChanged(sender As Object, e As EventArgs) Handles ComboBox1.SelectedIndexChanged
+        Dim sk As String = ComboBox1.Text
+
+        If sk <> "" Then
+            Panel2.Visible = True
+        Else
+            Panel2.Visible = False
+        End If
+
+    End Sub
+    Private Sub ComboBox3_SelectedIndexChanged(sender As Object, e As EventArgs) Handles ComboBox3.SelectedIndexChanged
+        Try
+
+            conn.Open()
+
+            Dim query As String = $"SELECT * FROM fores.product_loaded WHERE machine_name ='{ComboBox3.Text}' limit 1"
+            Dim command As New MySqlCommand(query, conn)
+            'command.Parameters.AddWithValue("@machine", ComboBox3.SelectedItem.ToString)
+            Dim reader As MySqlDataReader = command.ExecuteReader()
+            If reader.HasRows Then
+                While reader.Read()
+                    cmbProducts.Items.Add(reader.GetString("product_name"))
+
+                    Button7.Text = reader.GetString("status")
+                End While
+            Else
+                cmbProducts.Text = ""
+                Button7.Text = "Load"
+            End If
+            cmbProducts.SelectedItem = reader.GetString("product_name")
+            reader.Close()
+        Catch ex As Exception
+            MessageBox.Show(ex.Message)
+        Finally
+            conn.Close()
+        End Try
+        Dim sk As String = ComboBox1.Text
+
+        If sk <> "" Then
+            Panel1.Visible = True
+        Else
+            Panel1.Visible = False
+        End If
+
+    End Sub
+    ' Rest of your code...
+
+    Private Sub Button1_Click_1(sender As Object, e As EventArgs) Handles Button1.Click
+        Try
+            conn.Open()
+
+            ' Get the selected product name Line In charge from the ComboBox
+            Dim selectlineincharge As String = ComboBox1.SelectedItem.ToString()
+
+            ' Get the selected product name from the ComboBox
+            Dim selectedProduct As String = cmbProducts.SelectedItem.ToString()
+
+            ' Get the selected machine name from ComboBox3
+            Dim selectedMachine As String = ComboBox3.SelectedItem.ToString()
+
+            ' Insert or update the product loaded entry in the database
+            Dim query As String = "INSERT INTO fores.product_loaded (line_in_charge, product_name, machine_name, status) VALUES (@lineincharge, @product, @machine, @status) " &
+                      "ON DUPLICATE KEY UPDATE status = @status"
+            Dim command As New MySqlCommand(query, conn)
+            command.Parameters.AddWithValue("@lineincharge", selectlineincharge)
+            command.Parameters.AddWithValue("@product", selectedProduct)
+            command.Parameters.AddWithValue("@machine", selectedMachine)
+            command.Parameters.AddWithValue("@status", Button7.Text)
+            command.ExecuteNonQuery()
+            conn.Close()
+        Catch ex As Exception
+            ' Handle the exception or display an error message
+            MessageBox.Show(ex.Message)
+        Finally
+            conn.Dispose()
+        End Try
+
+        Production_Entry.Show()
+        Me.Close()
+    End Sub
+
+
+
+    Private Sub Button7_Click_1(sender As Object, e As EventArgs) Handles Button7.Click
+        ' Get the selected product name from the ComboBox
+        Dim selectedProduct As String = cmbProducts.SelectedItem.ToString()
+
+        If Button7.BackColor = Color.Green Then
+            ' Change the button color to red
+            Button7.BackColor = Color.Red
+            Button7.Text = "Unload"
+
+            ' Pass the selected product name to Form3
+            Production_Entry.ComboBoxpn.Items.Clear()
+            Button1.Hide()
+            cmbProducts.Enabled = True
+            ComboBox3.Enabled = True
+
+            '' Unload product and clear the table data are truncated
+            'Dim selectedTable As String = cmbProducts.SelectedItem.ToString()
+
+            'If Not String.IsNullOrEmpty(selectedTable) Then
+            '    Dim query As String = $"TRUNCATE TABLE `{selectedTable}`"
+
+            '    Using connection As New MySqlConnection(connectionString)
+            '        Using command As New MySqlCommand(query, connection)
+            '            connection.Open()
+            '            command.ExecuteNonQuery()
+            '        End Using
+            '    End Using
+
+            '    MessageBox.Show("Table truncated successfully.")
+            'Else
+            '    MessageBox.Show("Please select a table.")
+            'End If
+
+            ' Save the product loaded entry in the database with status "unload"
+            SaveProductLoadedEntry("Unload", selectedProduct)
+        Else
+            ' Set the product status as "Active" in Form2
+            ' change_machine.Label2.Text = "Active : " & selectedProduct
+            ' change_machine.Label2.ForeColor = Color.Green
+
+            ' Change the button color to green
+            ' Button7.Text = "Loaded" And BackColor = Color.Green
+            Button7.BackColor = Color.Green
+            Button7.Text = "Loaded"
+            Button1.Show()
+            cmbProducts.Enabled = False
+            ComboBox3.Enabled = False
+
+            ' Pass the selected product name to Form3
+            Production_Entry.ComboBoxpn.Items.Add(selectedProduct)
+
+            ' Update the status from "unload" to "load" in the database
+            SaveProductLoadedEntry("Load", selectedProduct)
+        End If
+    End Sub
+
+
+    Private Sub SaveProductLoadedEntry(status As String, product As String)
+        Try
+            conn.Open()
+
+            Dim query As String = "UPDATE fores.product_loaded SET status = @status WHERE product_name = @product"
+            Dim command As New MySqlCommand(query, conn)
+            command.Parameters.AddWithValue("@status", status)
+            command.Parameters.AddWithValue("@product", product)
+            command.ExecuteNonQuery()
+            conn.Close()
+        Catch ex As Exception
+            ' Handle the exception or display an error message
+            MessageBox.Show(ex.Message)
+        Finally
+            conn.Dispose()
+        End Try
+    End Sub
+
+
+    Private Sub cmbProducts_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cmbProducts.SelectedIndexChanged, cmbProducts.SelectedValueChanged
+        Panel4.Visible = True
+        If conn.State = ConnectionState.Open Then
+            conn.Close()
+        End If
+        btn_save.Enabled = True
+        Panel2.Visible = True
+        btn_save.BackColor = Color.Green
+        conn.Open()
+        Dim columnName As String = "material_sap_code"
+        If columnName <> "" Then
+            Dim query As String = $"SELECT * FROM bom_material_master WHERE {columnName} = '{cmbProducts.SelectedItem.ToString}'"
+            Dim command As New MySqlCommand(query, conn)
+            'command.Parameters.AddWithValue("@selectedItem", selectedItem)
+            Dim reader As MySqlDataReader = command.ExecuteReader()
+            Try
+                If reader.HasRows Then
+                    reader.Read()
+                    txtMetal1Code.Text = reader("metal1_sap_code").ToString()
+                    txtMetal1Desc.Text = reader("metal1_description").ToString()
+                    txtMetal2Code.Text = reader("metal2_sap_code").ToString()
+                    txtMetal2Desc.Text = reader("metal2_description").ToString()
+                    txtMetal3Code.Text = reader("metal3_sap_code").ToString()
+                    txtMetal3Desc.Text = reader("metal3_description").ToString()
+                    batch_desc.Text = reader("batch_code_description").ToString()
+                    'buttonClicked = True
+                    If String.IsNullOrEmpty(txtMetal1Code.Text) Then
+                        txtMetal1Desc.Text = ""
+                        txtMetal1Lot.Text = ""
+                        txtMetal1Lot.Enabled = False
+                        txtMetal1Qty.Text = "0"
+                        txtMetal1Qty.Enabled = False
+                    Else
+
+                        txtMetal1Lot.Enabled = True
+
+                        txtMetal1Qty.Enabled = True
+                    End If
+
+                    If String.IsNullOrEmpty(txtMetal2Code.Text) Then
+                        txtMetal2Desc.Text = ""
+                        txtMetal2Lot.Text = ""
+                        txtMetal2Lot.Enabled = False
+                        txtMetal2Qty.Text = "0"
+                        txtMetal2Qty.Enabled = False
+                    Else
+                        txtMetal2Lot.Enabled = True
+
+                        txtMetal2Qty.Enabled = True
+                    End If
+
+                    If String.IsNullOrEmpty(txtMetal3Code.Text) Then
+                        txtMetal3Desc.Text = ""
+                        txtMetal3Lot.Text = ""
+                        txtMetal3Lot.Enabled = False
+                        txtMetal3Qty.Text = "0"
+                        txtMetal3Qty.Enabled = False
+                    Else
+                        txtMetal3Lot.Enabled = True
+
+                        txtMetal3Qty.Enabled = True
+                    End If
+
+                    SelectDesc.Text = reader("material_description").ToString()
+                    SelectDesc.Enabled = False
+                    cmbProducts.Enabled = True
+                    txtMetal1Code.Enabled = False
+                    txtMetal2Code.Enabled = False
+                    txtMetal3Code.Enabled = False
+                    txtMetal1Desc.Enabled = False
+                    txtMetal2Desc.Enabled = False
+                    txtMetal3Desc.Enabled = False
+                Else
+                    MessageBox.Show("Error: No Data Found")
+                End If
+            Catch ex As Exception
+                MessageBox.Show("Error: " & ex.Message)
+
+            Finally
+                reader.Close()
+            End Try
+        End If
+        conn.Close()
+    End Sub
+
+    Private Sub btn_save_Click(sender As Object, e As EventArgs) Handles btn_save.Click
+        btn_save.Enabled = False
+        'Update_Available()
+
+        Try
+            conn.Open()
+            Dim query As String = $"SELECT run_cavity,shift,batch_no FROM {cmbProducts.SelectedItem.ToString()} "
+            Dim command As New MySqlCommand(query, conn)
+            Dim reader As MySqlDataReader = command.ExecuteReader()
+            If reader.HasRows Then
+                reader.Read()
+                'Dim cycleTime As Integer = reader.GetInt32("Cycle_time")
+                Dim runCavity As Integer = reader.GetInt32("run_cavity")
+                shift = reader.GetChar("shift")
+                batch_no = reader.GetString("batch_no")
+                reader.Close()
+                conn.Close()
+                Exit_loop = False
+
+                For printed = printed + 1 To runCavity
+                    If String.IsNullOrEmpty(txtMetal1Code.Text) Or txtMetal1Code.Text = "" And String.IsNullOrEmpty(txtMetal2Code.Text) Or txtMetal2Code.Text = "" And String.IsNullOrEmpty(txtMetal3Code.Text) Or txtMetal3Code.Text = "" Then
+                        Func_Barcode()
+                    ElseIf (Double.Parse(txtMetal1Qty.Text) <= 0 Or txtMetal1Lot.Text = "" And txtMetal1Code IsNot Nothing And Double.Parse(txtMetal2Qty.Text) <= 0 Or txtMetal2Lot.Text = "" And txtMetal2Code IsNot Nothing And Double.Parse(txtMetal3Qty.Text) <= 0) Or txtMetal3Lot.Text = "" And txtMetal3Code IsNot Nothing Then
+                        btn_save.Text = "Restart"
+                        btn_save.BackColor = Color.Yellow
+                        btn_save.ForeColor = Color.Black
+                        printed -= 1
+                        btn_save.Enabled = True
+                        If Not printed = runCavity Then
+                            cmbProducts.Enabled = False
+                        End If
+                        MessageBox.Show("Error: Please Fill LOT/Batch No. and Quantity")
+                        Exit For
+                    ElseIf printed = runCavity Then
+                        'Func_update_qty()
+                        Func_Barcode()
+                        printed = 0
+                        MessageBox.Show("Success: " & "All stickers printed")
+                        cmbProducts.Enabled = True
+                        btn_save.Text = "Print Stickers"
+                        btn_save.Enabled = True
+                        Exit For
+                    ElseIf printed < runCavity Then
+                        If String.IsNullOrEmpty(txtMetal1Code.Text) Or txtMetal1Code.Text = " " Then
+                            txtMetal1Lot.Enabled = False
+                            txtMetal1Qty.Enabled = False
+                        End If
+                        If String.IsNullOrEmpty(txtMetal2Code.Text) Or txtMetal2Code.Text = " " Then
+                            txtMetal2Lot.Enabled = False
+                            txtMetal2Qty.Enabled = False
+                        End If
+                        If String.IsNullOrEmpty(txtMetal3Code.Text) Or txtMetal3Code.Text = " " Then
+                            txtMetal3Lot.Enabled = False
+                            txtMetal3Qty.Enabled = False
+                        End If
+                        btn_save.Enabled = False
+                        Func_Barcode()
+                    End If
+                    If Exit_loop Then
+                        Exit For
+                    End If
+                Next
+                If Not String.IsNullOrEmpty(txtMetal1Code.Text) Then
+                    txtMetal1Lot.Enabled = True
+                    txtMetal1Qty.Enabled = True
+                End If
+                If Not String.IsNullOrEmpty(txtMetal2Code.Text) Then
+                    txtMetal2Lot.Enabled = True
+                    txtMetal2Qty.Enabled = True
+                End If
+                If Not String.IsNullOrEmpty(txtMetal3Code.Text) Then
+                    txtMetal3Lot.Enabled = True
+                    txtMetal3Qty.Enabled = True
+                End If
+                reader.Close()
+            End If
+            btn_save.Enabled = True
+        Catch ex As Exception
+            MessageBox.Show("Error: " & ex.Message)
+            btn_save.Enabled = True
+        End Try
+
+    End Sub
+    Private Sub Func_update_qty()
+        conn.Open()
+        Dim Metal1_qty As Double = Double.Parse(txtMetal1Qty.Text)
+        Dim Metal2_qty As Double = Double.Parse(txtMetal2Qty.Text)
+        Dim Metal3_qty As Double = Double.Parse(txtMetal3Qty.Text)
+
+        Dim query As String = $"SELECT * FROM bom_material_master WHERE material_sap_code = '{cmbProducts.SelectedItem.ToString}'"
+        Dim command As New MySqlCommand(query, conn)
+        Dim reader As MySqlDataReader = command.ExecuteReader()
+        If reader.HasRows Then
+            reader.Read()
+            'Get Metal Quantity as Double  
+            Dim qty1 As Double? = reader.GetDouble("metal1_qty")
+            Dim qty2 As Double? = reader.GetDouble("metal2_qty")
+            Dim qty3 As Double? = reader.GetDouble("metal3_qty")
+            reader.Close()
+            Try
+                Dim is_empty = False
+                'Check if there are metal3 available
+                If Not String.IsNullOrEmpty(txtMetal1Code.Text) Then
+                    If qty1 <= Metal1_qty Then
+                        query = $"UPDATE available_metal SET metal_Qty = metal_Qty - {qty1}, Date = NOW() WHERE metal_code = '{txtMetal1Code.Text}'"
+                        command = New MySqlCommand(query, conn)
+                        command.ExecuteNonQuery()
+                        txtMetal1Qty.Text = (Metal1_qty - qty1).ToString()
+                    Else
+                        is_empty = True
+                        Exit_loop = True
+                    End If
+
+                End If
+                If Not String.IsNullOrEmpty(txtMetal2Code.Text) Then
+                    If qty2 <= Metal2_qty Then
+                        query = $"UPDATE available_metal SET metal_Qty = metal_Qty - {qty2}, Date = NOW() WHERE metal_code = '{txtMetal2Code.Text}'"
+                        command = New MySqlCommand(query, conn)
+                        command.ExecuteNonQuery()
+                        txtMetal2Qty.Text = (Metal2_qty - qty2).ToString()
+                    Else
+                        is_empty = True
+                        'MessageBox.Show("Error: Please Fill LOT/Batch No. and Quantity")
+                        Exit_loop = True
+                    End If
+                End If
+                If Not String.IsNullOrEmpty(txtMetal3Code.Text) Then
+                    If qty3 <= Metal3_qty Then
+                        query = $"UPDATE available_metal SET metal_Qty = metal_Qty - {qty3}, Date = NOW() WHERE metal_code = '{txtMetal3Code.Text}'"
+                        command = New MySqlCommand(query, conn)
+                        command.ExecuteNonQuery()
+                        txtMetal3Qty.Text = (Metal3_qty - qty3).ToString()
+                    Else
+                        is_empty = True
+
+                        'MessageBox.Show("Error: Please Fill LOT/Batch No. and Quantity")
+                        Exit_loop = True
+                    End If
+                End If
+                If is_empty Then
+                    btn_save.Text = "Restart"
+                    btn_save.BackColor = Color.Yellow
+                    btn_save.ForeColor = Color.Black
+                    btn_save.Enabled = True
+                    MessageBox.Show("Error: No Material In Table to update or Less than size")
+                Else
+                    print(Nothing, savepath)
+
+                End If
+
+            Catch ex As Exception
+                MessageBox.Show("Error: While Updating the database " & ex.Message)
+                Exit_loop = True
+            Finally
+                conn.Close()
+            End Try
+        Else
+            MessageBox.Show("Error: Material Sap Code Not Found ")
+
+        End If
+    End Sub
+    Private Sub Func_Barcode()
+        Dim gen As New QRCodeGenerator
+        'Create a table format string based on the input
+        If txtMetal1Code.Text Is Nothing Then
+            txtMetal1Code.Text = " "
+            txtMetal1Lot.Text = "0"
+        ElseIf txtMetal2Code.Text Is Nothing Then
+            txtMetal2Code.Text = " "
+            txtMetal2Lot.Text = "0"
+        ElseIf txtMetal3Code.Text Is Nothing Then
+            txtMetal3Code.Text = " "
+            txtMetal3Lot.Text = "0"
+        End If
+        'Data in barcode encode
+        Dim tableInput As String = shift.ToString + (DateTime.Today).ToString("yyyyMMdd") + "/" + cmbProducts.Text + "/" + SelectDesc.Text + "/" + batch_no.ToString + batch_desc.ToString & vbCrLf &
+                               txtMetal1Code.Text & "|" & txtMetal1Lot.Text + "/" + txtMetal2Code.Text & "/" & txtMetal2Lot.Text + "/" + txtMetal3Code.Text & "/" & txtMetal3Lot.Text & vbCrLf
+        'cmbProducts.Text & "|" & shift + (DateTime.Today).ToString("yyddMM") + batch_no.ToString & vbCrLf &
+        '                       txtMetal1Code.Text & "|" & txtMetal1Lot.Text & vbCrLf &
+        '                       txtMetal2Code.Text & "|" & txtMetal2Lot.Text & vbCrLf &
+        '                       txtMetal3Code.Text & "|" & txtMetal3Lot.Text & vbCrLf
+
+        Dim data = gen.CreateQrCode(tableInput, QRCodeGenerator.ECCLevel.Q)
+        Dim code As New QRCode(data)
+        'Path of pdf file
+        Dim saveDirectory As String = "\fores india\data" ' Change the save directory as per your requirement
+        Dim fileName As String = cmbProducts.SelectedItem + ".pdf"
+        savepath = Path.Combine(saveDirectory, fileName)
+        If Not Directory.Exists(saveDirectory) Then
+            Directory.CreateDirectory(saveDirectory)
+        End If
+        Using fs As New FileStream(savePath, FileMode.Create)
+            Try
+                Using doc As New Document()
+                    'doc.SetPageSize(New iTextSharp.text.Rectangle(320, 200))s
+                    Using writer As PdfWriter = PdfWriter.GetInstance(doc, fs)
+                        doc.Open()
+                        Dim table As New PdfPTable(2)
+                        table.WidthPercentage = 20
+                        table.HorizontalAlignment = Element.ALIGN_LEFT ' Align the table to the left
+                        ' Set cell border style
+                        Dim cellBorder As Integer = Rectangle.TOP_BORDER Or Rectangle.BOTTOM_BORDER Or Rectangle.LEFT_BORDER Or Rectangle.RIGHT_BORDER
+                        Dim image As iTextSharp.text.Image = iTextSharp.text.Image.GetInstance(code.GetGraphic(6), System.Drawing.Imaging.ImageFormat.Png)
+                        image.ScalePercent(12)
+                        ' Create a PdfPCell for the image
+                        Dim cell1 As New PdfPCell()
+                        cell1.Border = cellBorder
+                        cell1.HorizontalAlignment = PdfPCell.ALIGN_CENTER ' Align the content horizontally to the center
+                        cell1.VerticalAlignment = PdfPCell.ALIGN_MIDDLE ' Align the content vertically to the middle
+                        cell1.AddElement(image)
+
+                        ' Add the image cell to the table
+                        table.AddCell(cell1)
+                        Dim nestedTable As New PdfPTable(1)
+                        table.DefaultCell.Border = cellBorder
+
+                        Dim text1 As New PdfPCell(New Phrase(New Phrase(shift.ToString + DateAndTime.Today.ToString("yyyyMMdd") + batch_no.ToString)))
+                        text1.Border = cellBorder
+                        text1.Phrase.Font.Size = 6 ' Set the font size
+
+                        text1.MinimumHeight = 12 ' Set the minimum cell height
+                        table.AddCell(text1)
+
+                        'Dim text2 As New PdfPCell(New Phrase(SelectDesc.Text.ToString))
+                        'text2.Border = cellBorder
+                        'text2.MinimumHeight = 30 ' Set the minimum cell height
+                        'text2.Phrase.Font.Size = 12 ' Set the font size
+
+                        'nestedTable.AddCell(text2)
+
+                        'Dim text3 As New PdfPCell(New Phrase(shift.ToString + DateAndTime.Today.ToString("yyyyMMdd") + batch_no.ToString))
+                        'text3.Border = cellBorder
+                        'text1.Phrase.Font.Size = 12 ' Set the font size
+                        'text3.MinimumHeight = 30 ' Set the minimum cell height
+
+                        'nestedTable.AddCell(text3)
+
+                        'Dim cell2 As New PdfPCell(nestedTable)
+                        'cell2.Border = cellBorder
+                        'table.AddCell(cell2)
+
+                        'Dim text4 As New PdfPCell(New Phrase("Batch No.:" + batch_no.ToString))
+                        'text4.Border = cellBorder
+                        'text4.Phrase.Font.Size = 12 ' Set the font size
+                        'text4.MinimumHeight = 30 ' Set the minimum cell height
+
+                        'Dim text5 As New PdfPCell(New Phrase(DateTime.Now().ToString("yyMMdd|hhmmss")))
+                        'text5.Border = cellBorder
+                        'text5.Phrase.Font.Size = 12 ' Set the font size
+                        'text5.MinimumHeight = 30 ' Set the minimum cell height
+                        'table.AddCell(text4)
+                        'table.AddCell(text5)
+                        doc.Add(table)
+                        doc.Close()
+                    End Using
+                End Using
+                Func_update_qty()
+                ' print(Nothing, savePath)
+
+            Catch ex As Exception
+                ' Handle other exceptions or display a generic error message
+                MessageBox.Show("Error: An unexpected error occurred while creating the PDF. Please contact the administrator for assistance.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+
+            End Try
+        End Using
+
+    End Sub
+
+    Public Sub print(ByVal args() As String, savepath As String)
+        Try
+
+            'Create a PdfDocument object
+            Dim doc As Spire.Pdf.PdfDocument = New Spire.Pdf.PdfDocument()
+            'Load a PDF file
+            doc.LoadFromFile(savepath)
+            If printed = 1 Then
+                If PrintDialog.ShowDialog() = DialogResult.OK Then
+                    doc.PrintSettings.PrinterName = PrintDialog.PrinterSettings.PrinterName
+                End If
+            End If
+            'Print with default printer
+            doc.Print()
+
+        Catch ex As Exception
+            MessageBox.Show("Error: Printing Stickers " & ex.Message)
+            Exit_loop = True
+        End Try
+    End Sub
+
+
+
+    Private Sub cmbProducts_Click(sender As Object, e As EventArgs) Handles cmbProducts.DoubleClick
+        If Not SelectDesc.Enabled Then
+            cmbProducts.Enabled = True
+        End If
+    End Sub
+    Private Sub txtMetal1Qty_TextChanged(sender As Object, e As EventArgs) Handles txtMetal1Qty.TextChanged
+        Dim enteredText As String = txtMetal1Qty.Text
+        ' Check if the entered text is numeric
+        Dim isNumeric As Boolean = Double.TryParse(enteredText, 0)
+        If Not isNumeric Then
+            ' Clear the textbox or display an error message
+            txtMetal1Qty.Text = ""
+            ' You can also display an error message
+            'MessageBox.Show("Only numeric input is allowed.")
+        End If
+    End Sub
+    Private Sub txtMetal2Qty_TextChanged(sender As Object, e As EventArgs) Handles txtMetal2Qty.TextChanged
+        Dim enteredText As String = txtMetal2Qty.Text
+        ' Check if the entered text is numeric
+        Dim isNumeric As Boolean = Double.TryParse(enteredText, 0)
+        If Not isNumeric Then
+            ' Clear the textbox or display an error message
+            txtMetal2Qty.Text = ""
+            ' You can also display an error message
+            'MessageBox.Show("Only numeric input is allowed.")
+        End If
+    End Sub
+    Private Sub txtMetal3Qty_TextChanged(sender As Object, e As EventArgs) Handles txtMetal3Qty.TextChanged
+        Dim enteredText As String = txtMetal3Qty.Text
+        ' Check if the entered text is numeric
+        Dim isNumeric As Boolean = Double.TryParse(enteredText, 0)
+        If Not isNumeric Then
+            ' Clear the textbox or display an error message
+            txtMetal3Qty.Text = ""
+            ' You can also display an error message
+            'MessageBox.Show("Only numeric input is allowed.")
+        End If
+    End Sub
+
+    Private Sub cmbProducts_MouseEnter(sender As Object, e As EventArgs) Handles cmbProducts.MouseEnter
+        ToolTip1.SetToolTip(cmbProducts, "Select Sap Code of Material")
+        ' Display the tooltip                                                          
+        ToolTip1.Active = True
+    End Sub
+    Private Sub cmbProducts_MouseLeave(sender As Object, e As EventArgs) Handles cmbProducts.MouseLeave
+        'ToolTip1.SetToolTip(cmbProducts, "Select Sap Code of Material") 
+        ' Display the tooltip
+        ToolTip1.Active = False
+    End Sub
+    'Private Sub SelectDesc_MouseEnter(sender As Object, e As EventArgs)
+    '    ToolTip2.SetToolTip(SelectDesc, "Select Description Code of Material")
+
+    '    ' Display the tooltip
+    '    ToolTip2.Active = True
+    'End Sub
+    'Private Sub SelectDesc_MouseLeave(sender As Object, e As EventArgs)
+    '    'ToolTip1.SetToolTip(cmbProducts, "Select Sap Code of Material")
+
+    '    ' Display the tooltip
+    '    ToolTip2.Active = False
+    'End Sub
+
+    Private Sub Label1_Click(sender As Object, e As EventArgs) Handles Label1.DoubleClick
+        cmbProducts.Enabled = True
+    End Sub
+End Class
